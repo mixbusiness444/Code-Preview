@@ -39,7 +39,8 @@
     .toolbar label { color:var(--muted); font-size:11px; font-weight:600; }
     select,input[type=text] { background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; outline:none; }
     select:focus,input:focus { border-color:var(--accent); }
-    #language { min-width:150px; }
+    .language-indicator { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.7px; }
+    .language-indicator strong { color:#cbd3ff; background:#252f50; border:1px solid #394978; border-radius:7px; padding:7px 10px; font-size:11px; letter-spacing:0; }
     .spacer { flex:1; }
     .editor-card,.output-card,.side-card { border:1px solid var(--line); background:var(--panel); border-radius:12px; overflow:hidden; }
     .editor-top { height:47px; display:flex; align-items:center; justify-content:space-between; padding:0 13px; border-bottom:1px solid var(--line); gap:10px; }
@@ -80,7 +81,7 @@
     @media(max-width:950px) { main { grid-template-columns:1fr; } aside { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media(max-width:620px) {
       header { padding:0 13px; height:59px; } .brand { font-size:16px; } .brand small { display:none; }
-      main { padding:10px; gap:10px; } .toolbar { padding:9px; } #language { flex:1; min-width:120px; }
+      main { padding:10px; gap:10px; } .toolbar { padding:9px; } .language-indicator { flex:1; }
       .CodeMirror { height:360px; font-size:12px; } .editor-top { padding:0 8px; } .editor-actions .mini:nth-child(n+3) { display:none; }
       aside { display:flex; } .header-actions .btn:not(.primary) { display:none; }
     }
@@ -101,16 +102,7 @@
   <main>
     <section class="workspace">
       <div class="toolbar">
-        <label for="language">LANGUAGE</label>
-        <select id="language">
-          <option value="html">HTML</option><option value="javascript">JavaScript</option>
-          <option value="typescript">TypeScript</option><option value="python">Python</option>
-          <option value="c">C</option><option value="cpp">C++</option><option value="java">Java</option>
-          <option value="csharp">C#</option><option value="php">PHP</option><option value="ruby">Ruby</option>
-          <option value="go">Go</option><option value="rust">Rust</option><option value="kotlin">Kotlin</option>
-          <option value="swift">Swift</option><option value="lua">Lua</option><option value="r">R</option>
-          <option value="perl">Perl</option><option value="bash">Bash</option><option value="sql">SQL</option>
-        </select>
+        <span class="language-indicator">DETECTED LANGUAGE <strong id="languageBadge">HTML</strong></span>
         <span class="spacer"></span>
         <span class="status" id="runtimeStatus"><i class="dot off"></i> Checking runner…</span>
         <button class="btn run" id="runBtn">▶ Run code</button>
@@ -137,7 +129,7 @@
             <button class="output-tab" data-tab="preview">Preview</button>
           </div>
         </div>
-        <pre id="output"><span class="hint">Your program output will appear here. Select a language and click Run code.</span></pre>
+        <pre id="output"><span class="hint">Your program output will appear here. CodeSpace detects the language from the file extension automatically.</span></pre>
         <iframe id="preview" title="Code preview" sandbox="allow-scripts"></iframe>
       </div>
     </section>
@@ -170,6 +162,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
@@ -182,6 +175,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
+window.addEventListener("error", (event) => {
+  const output = document.getElementById("output");
+  if (output) output.textContent = "CodeSpace startup error: " + (event.message || "Unknown error") +
+    "\\n\\nPlease refresh the page and share this message if it continues.";
+});
 (() => {
   const $ = id => document.getElementById(id);
   const extensionMap = {
@@ -205,6 +203,7 @@
   };
   let files = [];
   let activeId = null;
+  let activeLanguage = "html";
   let runtimes = [];
   const editor = CodeMirror.fromTextArea($("codeEditor"), {
     lineNumbers:true, theme:"material-darker", indentUnit:2, tabSize:2,
@@ -215,14 +214,35 @@
   }
   function currentFile() { return files.find(f => f.id === activeId); }
   function saveEditor() { const f=currentFile(); if(f) f.content=editor.getValue(); }
-  function extensionLanguage(name) {
+  const languageNames = {
+    html:"HTML", javascript:"JavaScript", typescript:"TypeScript", python:"Python",
+    c:"C", cpp:"C++", java:"Java", csharp:"C#", php:"PHP", ruby:"Ruby",
+    go:"Go", rust:"Rust", kotlin:"Kotlin", swift:"Swift", lua:"Lua",
+    r:"R", perl:"Perl", bash:"Bash", sql:"SQL", css:"CSS",
+    json:"JSON", xml:"XML", plaintext:"Plain text"
+  };
+  function extensionLanguage(name, content="") {
     const ext=(name.split(".").pop()||"").toLowerCase();
-    const lookup={html:"html",htm:"html",js:"javascript",mjs:"javascript",ts:"typescript",py:"python",c:"c",h:"c",cpp:"cpp",cc:"cpp",cxx:"cpp",java:"java",cs:"csharp",php:"php",rb:"ruby",go:"go",rs:"rust",kt:"kotlin",swift:"swift",lua:"lua",r:"r",pl:"perl",sh:"bash",sql:"sql",css:"html"};
-    return lookup[ext] || "javascript";
+    const lookup={
+      html:"html",htm:"html",js:"javascript",mjs:"javascript",cjs:"javascript",jsx:"javascript",
+      ts:"typescript",tsx:"typescript",py:"python",pyw:"python",c:"c",h:"c",cpp:"cpp",cc:"cpp",cxx:"cpp",
+      java:"java",cs:"csharp",php:"php",rb:"ruby",go:"go",rs:"rust",kt:"kotlin",kts:"kotlin",
+      swift:"swift",lua:"lua",r:"r",pl:"perl",sh:"bash",bash:"bash",sql:"sql",
+      css:"css",json:"json",xml:"xml",svg:"xml"
+    };
+    if (lookup[ext]) return lookup[ext];
+    const sample=(content||"").trim();
+    if (/^(<!doctype html|<html|<body|<head)/i.test(sample)) return "html";
+    if (/^(import |from |def |class |print\s*\()/m.test(sample) && /(:\s*$|print\s*\()/m.test(sample)) return "python";
+    if (/^(#include\s*<|int main\s*\()/m.test(sample)) return "cpp";
+    if (/^(public class |class .*\\{)/m.test(sample)) return "java";
+    if (/^(const |let |var |function |console\.log)/m.test(sample)) return "javascript";
+    return "plaintext";
   }
   function setLanguage(lang) {
-    $("language").value=lang;
-    editor.setOption("mode", modeMap[lang] || "text/plain");
+    activeLanguage=lang;
+    $("languageBadge").textContent=languageNames[lang] || lang.toUpperCase();
+    editor.setOption("mode", modeMap[lang] || (lang==="css"?"css":lang==="json"?"application/json":lang==="xml"?"xml":"text/plain"));
   }
   function renderTabs() {
     $("fileTabs").innerHTML="";
@@ -241,7 +261,7 @@
     saveEditor(); activeId=id;
     const f=currentFile();
     editor.setValue(f?f.content:"");
-    if(f) setLanguage(extensionLanguage(f.name));
+    if(f) setLanguage(extensionLanguage(f.name, f.content));
     renderTabs();
     editor.refresh();
   }
@@ -265,7 +285,7 @@
     $("output").style.display="none"; $("preview").style.display="block";
     document.querySelectorAll(".output-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab==="preview"));
   }
-  function isHtmlMode() { return $("language").value==="html"; }
+  function isHtmlMode() { return activeLanguage==="html"; }
   async function loadRuntimes() {
     try {
       const res=await fetch("https://emkc.org/api/v2/piston/runtimes");
@@ -283,36 +303,14 @@
     const f=currentFile();
     if(!f) return;
     if(isHtmlMode()) { showPreview(); return; }
-    const lang=$("language").value;
+    const lang=activeLanguage;
+    if(lang==="css") {
+      setOutput("CSS stylesheet detected. CSS needs an HTML page to display its styling. Open the matching .html file to preview the website.");
+      return;
+    }
+    if(lang==="plaintext" || lang==="json" || lang==="xml") {
+      setOutput(languageNames[lang]+" file detected. It can be edited here, but is not directly executable.");
+      return;
+    }
     const runBtn=$("runBtn");
-    runBtn.disabled=true; runBtn.textContent="Running…";
-    setOutput("Running "+lang+"…");
-    try {
-      if(!runtimes.length) await loadRuntimes();
-      const runtime=runtimes.filter(r=>r.language===lang || (lang==="javascript" && r.language==="javascript"))
-        .sort((a,b)=>String(b.version).localeCompare(String(a.version),undefined,{numeric:true}))[0];
-      if(!runtime) throw new Error("This language is not currently available on the execution service. Try another language.");
-      const payload={
-        language:runtime.language,
-        version:runtime.version,
-        files:[{name:f.name,content:f.content}],
-        stdin:$("stdin").value,
-        args:[]
-      };
-      const response=await fetch("https://emkc.org/api/v2/piston/execute",{
-        method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)
-      });
-      const data=await response.json();
-      if(!response.ok) throw new Error(data.message || "Execution request failed (HTTP "+response.status+").");
-      const run=data.run||{};
-      const compile=data.compile||{};
-      let result="";
-      if(compile.output) result+="[Compile output]\n"+compile.output+"\n";
-      if(compile.stderr) result+="[Compile errors]\n"+compile.stderr+"\n";
-      if(run.output) result+=run.output;
-      if(run.stderr) result+="\n[Errors]\n"+run.stderr;
-      if(!result.trim()) result="Program finished with no output.";
-      if(run.code!==undefined && run.code!==0) result+="\n\nProcess exited with code "+run.code+".";
-      setOutput(result);
-    } catch(e) {
-      setOutput("Could not run
+    runBtn.disabled=true; runBtn.textConte
