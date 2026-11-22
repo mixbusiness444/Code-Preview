@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CodeSpace — a lightweight online code editor and runner." />
+  <title>CodeSpace — Online IDE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0b1020; --panel:#11182b; --panel2:#151f35; --line:#25314b;
+      --text:#e8edf7; --muted:#91a0ba; --accent:#7c8cff; --accent2:#4f65ef;
+      --green:#48d6a0; --red:#ff7185; --yellow:#f4c66a;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; min-height:100vh; }
+    button,select,input,textarea { font:inherit; }
+    button { cursor:pointer; }
+    .app { min-height:100vh; display:flex; flex-direction:column; }
+    header { height:66px; padding:0 22px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); background:#0e1526; gap:14px; }
+    .brand { display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:-.5px; font-size:19px; white-space:nowrap; }
+    .logo { width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#8c9aff,#5965e8);color:white;font-family:"DM Mono",monospace;font-size:17px;box-shadow:0 5px 18px #5868e955; }
+    .brand small { display:block; color:var(--muted); font-size:10px; font-weight:500; letter-spacing:1.4px; margin-top:1px; }
+    .header-actions { display:flex; align-items:center; gap:9px; }
+    .btn { border:1px solid var(--line); background:var(--panel2); color:var(--text); padding:9px 13px; border-radius:9px; font-size:12px; font-weight:600; transition:.15s; }
+    .btn:hover { border-color:#6879ef; transform:translateY(-1px); }
+    .btn.primary { background:var(--accent2); border-color:var(--accent2); color:white; }
+    .btn.primary:hover { background:#6678ff; }
+    .btn.run { background:#1c9b73; border-color:#1c9b73; color:white; min-width:94px; }
+    .btn:disabled { opacity:.55; cursor:wait; transform:none; }
+    main { width:100%; max-width:1600px; margin:0 auto; padding:18px; display:grid; grid-template-columns: minmax(0,1fr) 310px; gap:15px; flex:1; }
+    .workspace { min-width:0; display:flex; flex-direction:column; gap:12px; }
+    .toolbar { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:11px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:9px; }
+    .toolbar label { color:var(--muted); font-size:11px; font-weight:600; }
+    select,input[type=text] { background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; outline:none; }
+    select:focus,input:focus { border-color:var(--accent); }
+    #language { min-width:150px; }
+    .spacer { flex:1; }
+    .editor-card,.output-card,.side-card { border:1px solid var(--line); background:var(--panel); border-radius:12px; overflow:hidden; }
+    .editor-top { height:47px; display:flex; align-items:center; justify-content:space-between; padding:0 13px; border-bottom:1px solid var(--line); gap:10px; }
+    .file-tabs { display:flex; gap:5px; align-items:center; min-width:0; overflow:auto; }
+    .file-tab { padding:8px 11px; border-radius:7px; color:var(--muted); font-size:11px; white-space:nowrap; border:1px solid transparent; cursor:pointer; }
+    .file-tab.active { color:var(--text); background:#202b45; border-color:#344362; }
+    .editor-actions { display:flex; gap:6px; }
+    .mini { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:11px; }
+    .mini:hover { color:white; border-color:var(--accent); }
+    .CodeMirror { height:430px; font-family:"DM Mono",monospace; font-size:13px; line-height:1.65; background:#0d1425; }
+    .CodeMirror-gutters { background:#0d1425; border-right:1px solid #202a40; }
+    .CodeMirror-linenumber { color:#52617c; }
+    .editor-bottom { padding:8px 13px; border-top:1px solid var(--line); display:flex; justify-content:space-between; color:var(--muted); font-size:10px; }
+    .output-card { min-height:190px; }
+    .output-head { padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+    .output-head strong { font-size:12px; }
+    .output-tabs { display:flex; gap:6px; }
+    .output-tab { background:transparent; border:0; color:var(--muted); font-size:11px; padding:5px 8px; border-radius:6px; }
+    .output-tab.active { color:white; background:#263451; }
+    #output { padding:14px; min-height:130px; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.65 "DM Mono",monospace; color:#c7d2e7; }
+    #output .hint { color:var(--muted); font-family:Inter,sans-serif; }
+    #preview { display:none; width:100%; height:300px; background:white; border:0; }
+    aside { display:flex; flex-direction:column; gap:12px; }
+    .side-card { padding:15px; }
+    .side-card h3 { margin:0 0 11px; font-size:12px; }
+    .side-card p { margin:0; color:var(--muted); font-size:11px; line-height:1.65; }
+    .feature { display:flex; gap:10px; margin:12px 0; align-items:flex-start; }
+    .feature-icon { width:27px;height:27px;border-radius:8px;background:#222d4a;display:grid;place-items:center;color:#aab5ff;flex-shrink:0;font-size:13px; }
+    .feature b { display:block;font-size:11px;margin:1px 0 4px; }
+    .feature span { color:var(--muted);font-size:10px;line-height:1.5; }
+    .status { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; }
+    .dot { width:7px;height:7px;border-radius:50%;background:var(--green); }
+    .dot.off { background:var(--yellow); }
+    .input-area { width:100%; min-height:70px; resize:vertical; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px; font:11px "DM Mono",monospace; }
+    .hidden { display:none !important; }
+    .notice { color:var(--yellow); font-size:10px; line-height:1.6; margin-top:10px; }
+    footer { border-top:1px solid var(--line); padding:13px 20px; text-align:center; color:#65738e; font-size:10px; }
+    @media(max-width:950px) { main { grid-template-columns:1fr; } aside { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media(max-width:620px) {
+      header { padding:0 13px; height:59px; } .brand { font-size:16px; } .brand small { display:none; }
+      main { padding:10px; gap:10px; } .toolbar { padding:9px; } #language { flex:1; min-width:120px; }
+      .CodeMirror { height:360px; font-size:12px; } .editor-top { padding:0 8px; } .editor-actions .mini:nth-child(n+3) { display:none; }
+      aside { display:flex; } .header-actions .btn:not(.primary) { display:none; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo">&lt;/&gt;</div><div>CodeSpace<small>WRITE · RUN · PREVIEW</small></div></div>
+    <div class="header-actions">
+      <button class="btn" id="uploadBtn">↑ Upload files</button>
+      <input id="fileInput" type="file" multiple class="hidden" />
+      <button class="btn" id="downloadBtn">↓ Download</button>
+      <button class="btn primary" id="newBtn">＋ New file</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="workspace">
+      <div class="toolbar">
+        <label for="language">LANGUAGE</label>
+        <select id="language">
+          <option value="html">HTML</option><option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option><option value="python">Python</option>
+          <option value="c">C</option><option value="cpp">C++</option><option value="java">Java</option>
+          <option value="csharp">C#</option><option value="php">PHP</option><option value="ruby">Ruby</option>
+          <option value="go">Go</option><option value="rust">Rust</option><option value="kotlin">Kotlin</option>
+          <option value="swift">Swift</option><option value="lua">Lua</option><option value="r">R</option>
+          <option value="perl">Perl</option><option value="bash">Bash</option><option value="sql">SQL</option>
+        </select>
+        <span class="spacer"></span>
+        <span class="status" id="runtimeStatus"><i class="dot off"></i> Checking runner…</span>
+        <button class="btn run" id="runBtn">▶ Run code</button>
+      </div>
+
+      <div class="editor-card">
+        <div class="editor-top">
+          <div class="file-tabs" id="fileTabs"></div>
+          <div class="editor-actions">
+            <button class="mini" id="renameBtn">Rename</button>
+            <button class="mini" id="deleteBtn">Delete</button>
+            <button class="mini" id="clearBtn">Clear</button>
+          </div>
+        </div>
+        <textarea id="codeEditor"></textarea>
+        <div class="editor-bottom"><span id="fileInfo">index.html</span><span id="cursorInfo">Line 1, Col 1</span></div>
+      </div>
+
+      <div class="output-card">
+        <div class="output-head">
+          <strong>OUTPUT</strong>
+          <div class="output-tabs">
+            <button class="output-tab active" data-tab="console">Console</button>
+            <button class="output-tab" data-tab="preview">Preview</button>
+          </div>
+        </div>
+        <pre id="output"><span class="hint">Your program output will appear here. Select a language and click Run code.</span></pre>
+        <iframe id="preview" title="Code preview" sandbox="allow-scripts"></iframe>
+      </div>
+    </section>
+
+    <aside>
+      <div class="side-card">
+        <h3>Workspace</h3>
+        <div class="feature"><div class="feature-icon">⌘</div><div><b>Multi-file editor</b><span>Upload files, switch between them, and edit in one place.</span></div></div>
+        <div class="feature"><div class="feature-icon">▶</div><div><b>Run your code</b><span>Run supported languages through an online execution service.</span></div></div>
+        <div class="feature"><div class="feature-icon">▣</div><div><b>Instant web preview</b><span>Preview HTML projects in a separate sandboxed panel.</span></div></div>
+        <div class="feature"><div class="feature-icon">↓</div><div><b>Download project</b><span>Export your workspace as a ZIP file.</span></div></div>
+      </div>
+
+      <div class="side-card">
+        <h3>Program input</h3>
+        <p style="margin-bottom:9px">Optional input sent to programs that read from standard input.</p>
+        <textarea id="stdin" class="input-area" placeholder="Type program input here..."></textarea>
+      </div>
+
+      <div class="side-card">
+        <h3>Execution service</h3>
+        <div class="status" id="serviceStatus"><i class="dot off"></i> Connecting to Piston…</div>
+        <p style="margin-top:10px">Code execution is handled by an external service. Availability, supported versions and usage limits depend on that service.</p>
+        <div class="notice">Safety: do not run code from people you don't trust. Never enter passwords, API keys or private information into shared code.</div>
+      </div>
+    </aside>
+  </main>
+  <footer>CodeSpace · A lightweight browser IDE · Your files stay in this browser unless you upload or download them.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const extensionMap = {
+    html:"html", javascript:"js", typescript:"ts", python:"py", c:"c", cpp:"cpp",
+    java:"java", csharp:"cs", php:"php", ruby:"rb", go:"go", rust:"rs",
+    kotlin:"kt", swift:"swift", lua:"lua", r:"r", perl:"pl", bash:"sh", sql:"sql"
+  };
+  const modeMap = {
+    html:"htmlmixed", javascript:"javascript", typescript:"javascript", python:"python",
+    c:"text/x-csrc", cpp:"text/x-c++src", java:"text/x-java", csharp:"text/x-csharp",
+    php:"application/x-httpd-php", ruby:"ruby", go:"go", rust:"rust", kotlin:"text/x-kotlin",
+    swift:"text/x-swift", lua:"lua", r:"r", perl:"perl", bash:"shell", sql:"sql"
+  };
+  const starterCode = {
+    html:'<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>My first page</title>\n  <style>\n    body { font-family: Arial, sans-serif; padding: 40px; }\n    h1 { color: #5865e8; }\n  </style>\n</head>\n<body>\n  <h1>Hello, CodeSpace!</h1>\n  <p>Your website preview works.</p>\n  <button onclick="alert(\'It works!\')">Click me</button>\n</body>\n</html>',
+    javascript:'console.log("Hello from CodeSpace!");\n\nconst add = (a, b) => a + b;\nconsole.log("2 + 3 =", add(2, 3));',
+    python:'print("Hello from CodeSpace!")\n\nname = "developer"\nprint(f"Welcome, {name}!")',
+    cpp:'#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello from CodeSpace!" << endl;\n    return 0;\n}',
+    java:'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from CodeSpace!");\n    }\n}',
+    c:'#include <stdio.h>\n\nint main(void) {\n    printf("Hello from CodeSpace!\\n");\n    return 0;\n}'
+  };
+  let files = [];
+  let activeId = null;
+  let runtimes = [];
+  const editor = CodeMirror.fromTextArea($("codeEditor"), {
+    lineNumbers:true, theme:"material-darker", indentUnit:2, tabSize:2,
+    lineWrapping:true, mode:"htmlmixed", autofocus:false
+  });
+  function makeFile(name, content="") {
+    return { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()), name, content };
+  }
+  function currentFile() { return files.find(f => f.id === activeId); }
+  function saveEditor() { const f=currentFile(); if(f) f.content=editor.getValue(); }
+  function extensionLanguage(name) {
+    const ext=(name.split(".").pop()||"").toLowerCase();
+    const lookup={html:"html",htm:"html",js:"javascript",mjs:"javascript",ts:"typescript",py:"python",c:"c",h:"c",cpp:"cpp",cc:"cpp",cxx:"cpp",java:"java",cs:"csharp",php:"php",rb:"ruby",go:"go",rs:"rust",kt:"kotlin",swift:"swift",lua:"lua",r:"r",pl:"perl",sh:"bash",sql:"sql",css:"html"};
+    return lookup[ext] || "javascript";
+  }
+  function setLanguage(lang) {
+    $("language").value=lang;
+    editor.setOption("mode", modeMap[lang] || "text/plain");
+  }
+  function renderTabs() {
+    $("fileTabs").innerHTML="";
+    files.forEach(f=>{
+      const tab=document.createElement("button");
+      tab.className="file-tab"+(f.id===activeId?" active":"");
+      tab.textContent=f.name;
+      tab.title=f.name;
+      tab.addEventListener("click",()=>switchFile(f.id));
+      $("fileTabs").appendChild(tab);
+    });
+    const f=currentFile();
+    $("fileInfo").textContent=f?f.name:"No file";
+  }
+  function switchFile(id) {
+    saveEditor(); activeId=id;
+    const f=currentFile();
+    editor.setValue(f?f.content:"");
+    if(f) setLanguage(extensionLanguage(f.name));
+    renderTabs();
+    editor.refresh();
+  }
+  function addFile(name, content="") {
+    const f=makeFile(name,content); files.push(f); switchFile(f.id);
+  }
+  function setOutput(text) {
+    $("output").style.display="block"; $("preview").style.display="none";
+    $("output").textContent=text || "(No output)";
+    document.querySelectorAll(".output-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab==="console"));
+  }
+  function showPreview() {
+    saveEditor();
+    const f=currentFile();
+    if(!f) return;
+    let html=f.content;
+    if(!/<html[\s>]/i.test(html) && !/<body[\s>]/i.test(html)) {
+      html="<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head><body>"+html+"</body></html>";
+    }
+    $("preview").srcdoc=html;
+    $("output").style.display="none"; $("preview").style.display="block";
+    document.querySelectorAll(".output-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab==="preview"));
+  }
+  function isHtmlMode() { return $("language").value==="html"; }
+  async function loadRuntimes() {
+    try {
+      const res=await fetch("https://emkc.org/api/v2/piston/runtimes");
+      if(!res.ok) throw new Error("Runner returned HTTP "+res.status);
+      runtimes=await res.json();
+      $("runtimeStatus").innerHTML='<i class="dot"></i> Runner online';
+      $("serviceStatus").innerHTML='<i class="dot"></i> Connected to Piston';
+    } catch(e) {
+      $("runtimeStatus").innerHTML='<i class="dot off"></i> Runner unavailable';
+      $("serviceStatus").innerHTML='<i class="dot off"></i> Runner unavailable';
+    }
+  }
+  async function runCode() {
+    saveEditor();
+    const f=currentFile();
+    if(!f) return;
+    if(isHtmlMode()) { showPreview(); return; }
+    const lang=$("language").value;
+    const runBtn=$("runBtn");
+    runBtn.disabled=true; runBtn.textContent="Running…";
+    setOutput("Running "+lang+"…");
+    try {
+      if(!runtimes.length) await loadRuntimes();
+      const runtime=runtimes.filter(r=>r.language===lang || (lang==="javascript" && r.language==="javascript"))
+        .sort((a,b)=>String(b.version).localeCompare(String(a.version),undefined,{numeric:true}))[0];
+      if(!runtime) throw new Error("This language is not currently available on the execution service. Try another language.");
+      const payload={
+        language:runtime.language,
+        version:runtime.version,
+        files:[{name:f.name,content:f.content}],
+        stdin:$("stdin").value,
+        args:[]
+      };
+      const response=await fetch("https://emkc.org/api/v2/piston/execute",{
+        method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)
+      });
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.message || "Execution request failed (HTTP "+response.status+").");
+      const run=data.run||{};
+      const compile=data.compile||{};
+      let result="";
+      if(compile.output) result+="[Compile output]\n"+compile.output+"\n";
+      if(compile.stderr) result+="[Compile errors]\n"+compile.stderr+"\n";
+      if(run.output) result+=run.output;
+      if(run.stderr) result+="\n[Errors]\n"+run.stderr;
+      if(!result.trim()) result="Program finished with no output.";
+      if(run.code!==undefined && run.code!==0) result+="\n\nProcess exited with code "+run.code+".";
+      setOutput(result);
+    } catch(e) {
+      setOutput("Could not run
