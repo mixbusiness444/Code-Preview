@@ -59,12 +59,7 @@
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head"><h2>Result</h2><span class="muted" id="detected"></span></div>
-    <pre id="output">Your program's output will appear here.</pre>
-    <iframe id="preview" title="Code preview" sandbox="allow-scripts"></iframe>
-  </section>
-  <p class="muted">HTML/CSS/JavaScript projects run in the preview. Other supported languages run through the Piston online execution service. An internet connection is required.</p>
+  <p class="muted">Results open in a new browser tab. HTML/CSS/JavaScript projects open as a web preview; other supported languages run through the Piston online execution service. An internet connection is required.</p>
 </main>
 <script>
 (() => {
@@ -74,9 +69,6 @@
   const count = document.getElementById('fileCount');
   const run = document.getElementById('runBtn');
   const status = document.getElementById('status');
-  const output = document.getElementById('output');
-  const preview = document.getElementById('preview');
-  const detected = document.getElementById('detected');
   let files = [];
 
   const extToLang = {
@@ -140,10 +132,34 @@
   }));
   drop.addEventListener('drop', event => addFiles(event.dataTransfer.files));
 
-  async function runWebProject() {
-    const byName = new Map(files.map(file => [file.name, file]));
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+    })[char]);
+  }
+
+  function showInNewTab(tab, title, content, isHtml = false) {
+    if (!tab || tab.closed) {
+      status.textContent = 'Your browser blocked the new tab. Allow pop-ups for this site and tap Run again.';
+      return;
+    }
+    const doc = tab.document;
+    doc.open();
+    if (isHtml) {
+      doc.write(content);
+    } else {
+      doc.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
+        escapeHtml(title) +
+        '</title><style>body{margin:0;padding:24px;background:#101522;color:#edf1fa;font:14px system-ui}h2{font-size:18px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#171f31;border:1px solid #2a3448;border-radius:10px;padding:16px;font:13px/1.6 ui-monospace,monospace}</style></head><body><h2>' +
+        escapeHtml(title) + '</h2><pre>' + escapeHtml(content) + '</pre></body></html>');
+    }
+    doc.close();
+    tab.focus();
+  }
+
+  async function buildWebProject() {
     const htmlFile = files.find(file => /\.html?$/i.test(file.name));
-    let html = htmlFile ? await htmlFile.text() : '<!doctype html><html><body></body></html>';
+    let html = htmlFile ? await htmlFile.text() : '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>';
     const cssFiles = files.filter(file => /\.css$/i.test(file.name));
     const jsFiles = files.filter(file => /\.(js|mjs)$/i.test(file.name));
     const css = await Promise.all(cssFiles.map(file => file.text()));
@@ -155,19 +171,11 @@
     else html = styleTag + html;
     if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, scriptTag + '</body>');
     else html += scriptTag;
-
-    preview.srcdoc = html;
-    preview.style.display = 'block';
-    output.style.display = 'none';
-    detected.textContent = 'HTML / CSS / JavaScript preview';
-    status.textContent = 'Preview generated.';
+    return html;
   }
 
   async function runOtherLanguage(file, lang) {
     status.textContent = 'Sending code to online runner…';
-    output.style.display = 'block';
-    preview.style.display = 'none';
-    output.textContent = 'Running ' + lang + '…';
     const runtimesResponse = await fetch('https://emkc.org/api/v2/piston/runtimes');
     if (!runtimesResponse.ok) throw new Error('Could not contact the code runner.');
     const runtimes = await runtimesResponse.json();
@@ -195,30 +203,42 @@
     if (data.run && data.run.output) result += data.run.output;
     if (data.run && data.run.stderr) result += '\n' + data.run.stderr;
     if (!result.trim()) result = 'Program finished with no output.';
-    output.textContent = result;
-    detected.textContent = 'Detected: ' + lang;
-    status.textContent = 'Finished.';
+    return result;
   }
 
   run.addEventListener('click', async () => {
     if (!files.length) return;
+
+    // Open the tab immediately during the button click so popup blockers allow it.
+    const resultTab = window.open('about:blank', '_blank');
+    if (!resultTab) {
+      status.textContent = 'Pop-up blocked. Allow pop-ups for this site, then tap Run again.';
+      return;
+    }
+
     run.disabled = true;
     run.textContent = 'Running…';
+    status.textContent = 'Preparing your result…';
     try {
       const languages = files.map(file => ({ file, lang: languageOf(file) }));
-      const htmlProject = languages.some(item => item.lang === 'html' || item.lang === 'css' || item.lang === 'javascript');
+      const htmlProject = languages.some(item =>
+        item.lang === 'html' || item.lang === 'css' || item.lang === 'javascript'
+      );
+
       if (htmlProject) {
-        await runWebProject();
+        const page = await buildWebProject();
+        showInNewTab(resultTab, 'CodeSpace Preview', page, true);
+        status.textContent = 'Preview opened in a new tab.';
       } else {
         const chosen = languages.find(item => item.lang);
         if (!chosen) throw new Error('Could not identify the language from the file extension. Please upload a file with a supported extension.');
-        await runOtherLanguage(chosen.file, chosen.lang);
+        const result = await runOtherLanguage(chosen.file, chosen.lang);
+        showInNewTab(resultTab, 'CodeSpace Output — ' + chosen.lang, result, false);
+        status.textContent = 'Output opened in a new tab.';
       }
     } catch (error) {
-      preview.style.display = 'none';
-      output.style.display = 'block';
-      output.textContent = 'Could not run the selected files.\n\n' + error.message;
-      status.textContent = 'Run failed.';
+      showInNewTab(resultTab, 'CodeSpace — Run Error', error.message, false);
+      status.textContent = 'Run failed. Error opened in a new tab.';
     } finally {
       run.disabled = files.length === 0;
       run.textContent = '▶ Run';
