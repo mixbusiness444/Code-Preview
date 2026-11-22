@@ -63,6 +63,31 @@
 </main>
 <script>
 (() => {
+  // If this URL is a saved result, restore it from this same file.
+  const resultId = new URLSearchParams(location.search).get('result');
+  if (resultId) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('codespace-result-' + resultId) || 'null');
+      if (!saved) throw new Error('This saved result is no longer available. Run your code again.');
+      if (saved.isHtml) {
+        document.open();
+        document.write(saved.content);
+        document.close();
+      } else {
+        document.title = saved.title || 'CodeSpace Output';
+        document.body.innerHTML = '<main style="max-width:900px;margin:40px auto;padding:20px;color:#edf1fa;font:15px system-ui;background:#101522;min-height:80vh"><h2 style="margin-top:0">' + escapeResultText(saved.title || 'CodeSpace Output') + '</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#171f31;border:1px solid #2a3448;border-radius:12px;padding:18px;color:#d7e0f0;font:13px/1.6 ui-monospace,monospace">' + escapeResultText(saved.content) + '</pre></main>';
+        document.body.style.cssText = 'margin:0;min-height:100vh;background:#101522';
+      }
+    } catch (error) {
+      document.body.innerHTML = '<p style="font:16px system-ui;padding:24px">' + escapeResultText(error.message) + '</p>';
+    }
+    return;
+  }
+
+  function escapeResultText(value) {
+    return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  }
+
   const input = document.getElementById('fileInput');
   const drop = document.getElementById('dropZone');
   const list = document.getElementById('fileList');
@@ -143,18 +168,15 @@
       status.textContent = 'Your browser blocked the new tab. Allow pop-ups for this site and tap Run again.';
       return;
     }
-    const doc = tab.document;
-    doc.open();
-    if (isHtml) {
-      doc.write(content);
-    } else {
-      doc.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
-        escapeHtml(title) +
-        '</title><style>body{margin:0;padding:24px;background:#101522;color:#edf1fa;font:14px system-ui}h2{font-size:18px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#171f31;border:1px solid #2a3448;border-radius:10px;padding:16px;font:13px/1.6 ui-monospace,monospace}</style></head><body><h2>' +
-        escapeHtml(title) + '</h2><pre>' + escapeHtml(content) + '</pre></body></html>');
+    try {
+      const id = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
+      localStorage.setItem('codespace-result-' + id, JSON.stringify({ title, content, isHtml }));
+      tab.location.href = '?result=' + encodeURIComponent(id);
+      tab.focus();
+    } catch (error) {
+      tab.close();
+      throw new Error('Could not save the result in this browser. Check available site storage and try again.');
     }
-    doc.close();
-    tab.focus();
   }
 
   async function buildWebProject() {
