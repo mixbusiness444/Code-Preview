@@ -1,316 +1,230 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="CodeSpace — a lightweight online code editor and runner." />
-  <title>CodeSpace — Online IDE</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg:#0b1020; --panel:#11182b; --panel2:#151f35; --line:#25314b;
-      --text:#e8edf7; --muted:#91a0ba; --accent:#7c8cff; --accent2:#4f65ef;
-      --green:#48d6a0; --red:#ff7185; --yellow:#f4c66a;
-    }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; min-height:100vh; }
-    button,select,input,textarea { font:inherit; }
-    button { cursor:pointer; }
-    .app { min-height:100vh; display:flex; flex-direction:column; }
-    header { height:66px; padding:0 22px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); background:#0e1526; gap:14px; }
-    .brand { display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:-.5px; font-size:19px; white-space:nowrap; }
-    .logo { width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#8c9aff,#5965e8);color:white;font-family:"DM Mono",monospace;font-size:17px;box-shadow:0 5px 18px #5868e955; }
-    .brand small { display:block; color:var(--muted); font-size:10px; font-weight:500; letter-spacing:1.4px; margin-top:1px; }
-    .header-actions { display:flex; align-items:center; gap:9px; }
-    .btn { border:1px solid var(--line); background:var(--panel2); color:var(--text); padding:9px 13px; border-radius:9px; font-size:12px; font-weight:600; transition:.15s; }
-    .btn:hover { border-color:#6879ef; transform:translateY(-1px); }
-    .btn.primary { background:var(--accent2); border-color:var(--accent2); color:white; }
-    .btn.primary:hover { background:#6678ff; }
-    .btn.run { background:#1c9b73; border-color:#1c9b73; color:white; min-width:94px; }
-    .btn:disabled { opacity:.55; cursor:wait; transform:none; }
-    main { width:100%; max-width:1600px; margin:0 auto; padding:18px; display:grid; grid-template-columns: minmax(0,1fr) 310px; gap:15px; flex:1; }
-    .workspace { min-width:0; display:flex; flex-direction:column; gap:12px; }
-    .toolbar { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:11px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:9px; }
-    .toolbar label { color:var(--muted); font-size:11px; font-weight:600; }
-    select,input[type=text] { background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; outline:none; }
-    select:focus,input:focus { border-color:var(--accent); }
-    .language-indicator { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.7px; }
-    .language-indicator strong { color:#cbd3ff; background:#252f50; border:1px solid #394978; border-radius:7px; padding:7px 10px; font-size:11px; letter-spacing:0; }
-    .spacer { flex:1; }
-    .editor-card,.output-card,.side-card { border:1px solid var(--line); background:var(--panel); border-radius:12px; overflow:hidden; }
-    .editor-top { height:47px; display:flex; align-items:center; justify-content:space-between; padding:0 13px; border-bottom:1px solid var(--line); gap:10px; }
-    .file-tabs { display:flex; gap:5px; align-items:center; min-width:0; overflow:auto; }
-    .file-tab { padding:8px 11px; border-radius:7px; color:var(--muted); font-size:11px; white-space:nowrap; border:1px solid transparent; cursor:pointer; }
-    .file-tab.active { color:var(--text); background:#202b45; border-color:#344362; }
-    .editor-actions { display:flex; gap:6px; }
-    .mini { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:11px; }
-    .mini:hover { color:white; border-color:var(--accent); }
-    .CodeMirror { height:430px; font-family:"DM Mono",monospace; font-size:13px; line-height:1.65; background:#0d1425; }
-    .CodeMirror-gutters { background:#0d1425; border-right:1px solid #202a40; }
-    .CodeMirror-linenumber { color:#52617c; }
-    .editor-bottom { padding:8px 13px; border-top:1px solid var(--line); display:flex; justify-content:space-between; color:var(--muted); font-size:10px; }
-    .output-card { min-height:190px; }
-    .output-head { padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
-    .output-head strong { font-size:12px; }
-    .output-tabs { display:flex; gap:6px; }
-    .output-tab { background:transparent; border:0; color:var(--muted); font-size:11px; padding:5px 8px; border-radius:6px; }
-    .output-tab.active { color:white; background:#263451; }
-    #output { padding:14px; min-height:130px; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.65 "DM Mono",monospace; color:#c7d2e7; }
-    #output .hint { color:var(--muted); font-family:Inter,sans-serif; }
-    #preview { display:none; width:100%; height:300px; background:white; border:0; }
-    aside { display:flex; flex-direction:column; gap:12px; }
-    .side-card { padding:15px; }
-    .side-card h3 { margin:0 0 11px; font-size:12px; }
-    .side-card p { margin:0; color:var(--muted); font-size:11px; line-height:1.65; }
-    .feature { display:flex; gap:10px; margin:12px 0; align-items:flex-start; }
-    .feature-icon { width:27px;height:27px;border-radius:8px;background:#222d4a;display:grid;place-items:center;color:#aab5ff;flex-shrink:0;font-size:13px; }
-    .feature b { display:block;font-size:11px;margin:1px 0 4px; }
-    .feature span { color:var(--muted);font-size:10px;line-height:1.5; }
-    .status { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; }
-    .dot { width:7px;height:7px;border-radius:50%;background:var(--green); }
-    .dot.off { background:var(--yellow); }
-    .input-area { width:100%; min-height:70px; resize:vertical; background:#0b1222; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px; font:11px "DM Mono",monospace; }
-    .hidden { display:none !important; }
-    .notice { color:var(--yellow); font-size:10px; line-height:1.6; margin-top:10px; }
-    footer { border-top:1px solid var(--line); padding:13px 20px; text-align:center; color:#65738e; font-size:10px; }
-    @media(max-width:950px) { main { grid-template-columns:1fr; } aside { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media(max-width:620px) {
-      header { padding:0 13px; height:59px; } .brand { font-size:16px; } .brand small { display:none; }
-      main { padding:10px; gap:10px; } .toolbar { padding:9px; } .language-indicator { flex:1; }
-      .CodeMirror { height:360px; font-size:12px; } .editor-top { padding:0 8px; } .editor-actions .mini:nth-child(n+3) { display:none; }
-      aside { display:flex; } .header-actions .btn:not(.primary) { display:none; }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeSpace</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #101522; color: #edf1fa; font: 15px system-ui, sans-serif; }
+  header { padding: 18px 22px; border-bottom: 1px solid #2a3448; background: #151d2d; }
+  h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; color: #aab5c8; font-size: 13px; }
+  main { width: min(900px, 100%); margin: 32px auto; padding: 0 16px; }
+  .drop { border: 2px dashed #6375aa; border-radius: 14px; padding: 42px 18px; text-align: center; background: #171f31; transition: .15s; }
+  .drop.over { background: #202d49; border-color: #91a5ff; }
+  .drop strong { display: block; font-size: 18px; margin-bottom: 8px; }
+  .drop p { color: #aab5c8; margin: 0 0 18px; font-size: 13px; }
+  button, .pick { border: 0; border-radius: 8px; padding: 11px 17px; background: #6478ed; color: white; font-weight: 650; cursor: pointer; }
+  button:disabled { opacity: .55; cursor: wait; }
+  #fileInput { display: none; }
+  .section { margin-top: 20px; background: #171f31; border: 1px solid #2a3448; border-radius: 12px; overflow: hidden; }
+  .section-head { padding: 13px 16px; border-bottom: 1px solid #2a3448; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .section-head h2 { font-size: 14px; margin: 0; }
+  #fileList { list-style: none; margin: 0; padding: 0; }
+  #fileList li { padding: 10px 16px; border-bottom: 1px solid #273147; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  #fileList li:last-child { border-bottom: 0; }
+  .muted { color: #aab5c8; font-size: 12px; }
+  .run-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+  #runBtn { background: #1b9c73; min-width: 110px; }
+  #status { color: #aab5c8; font-size: 12px; }
+  #output { margin: 0; min-height: 110px; padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e0f0; font: 13px/1.6 ui-monospace, monospace; }
+  #preview { display: none; width: 100%; height: 420px; background: white; border: 0; }
+  .empty { padding: 18px 16px; color: #aab5c8; font-size: 13px; }
+  @media (max-width: 560px) { main { margin: 18px auto; } .drop { padding: 30px 14px; } }
+</style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <div class="brand"><div class="logo">&lt;/&gt;</div><div>CodeSpace<small>WRITE · RUN · PREVIEW</small></div></div>
-    <div class="header-actions">
-      <button class="btn" id="uploadBtn">↑ Upload files</button>
-      <input id="fileInput" type="file" multiple class="hidden" />
-      <button class="btn" id="downloadBtn">↓ Download</button>
-      <button class="btn primary" id="newBtn">＋ New file</button>
+<header>
+  <h1>CodeSpace</h1>
+  <p>Choose your code files, then run them.</p>
+</header>
+<main>
+  <section class="drop" id="dropZone">
+    <strong>Drag and drop your files here</strong>
+    <p>Or choose files from your device. You can select multiple files.</p>
+    <label class="pick" for="fileInput">Choose files</label>
+    <input id="fileInput" type="file" multiple>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Selected files</h2>
+      <span class="muted" id="fileCount">0 files</span>
     </div>
-  </header>
+    <ul id="fileList"><li class="muted">No files selected yet.</li></ul>
+    <div class="run-row">
+      <button id="runBtn" disabled>▶ Run</button>
+      <span id="status">Select at least one file to begin.</span>
+    </div>
+  </section>
 
-  <main>
-    <section class="workspace">
-      <div class="toolbar">
-        <span class="language-indicator">DETECTED LANGUAGE <strong id="languageBadge">HTML</strong></span>
-        <span class="spacer"></span>
-        <span class="status" id="runtimeStatus"><i class="dot off"></i> Checking runner…</span>
-        <button class="btn run" id="runBtn">▶ Run code</button>
-      </div>
-
-      <div class="editor-card">
-        <div class="editor-top">
-          <div class="file-tabs" id="fileTabs"></div>
-          <div class="editor-actions">
-            <button class="mini" id="renameBtn">Rename</button>
-            <button class="mini" id="deleteBtn">Delete</button>
-            <button class="mini" id="clearBtn">Clear</button>
-          </div>
-        </div>
-        <textarea id="codeEditor"></textarea>
-        <div class="editor-bottom"><span id="fileInfo">index.html</span><span id="cursorInfo">Line 1, Col 1</span></div>
-      </div>
-
-      <div class="output-card">
-        <div class="output-head">
-          <strong>OUTPUT</strong>
-          <div class="output-tabs">
-            <button class="output-tab active" data-tab="console">Console</button>
-            <button class="output-tab" data-tab="preview">Preview</button>
-          </div>
-        </div>
-        <pre id="output"><span class="hint">Your program output will appear here. CodeSpace detects the language from the file extension automatically.</span></pre>
-        <iframe id="preview" title="Code preview" sandbox="allow-scripts"></iframe>
-      </div>
-    </section>
-
-    <aside>
-      <div class="side-card">
-        <h3>Workspace</h3>
-        <div class="feature"><div class="feature-icon">⌘</div><div><b>Multi-file editor</b><span>Upload files, switch between them, and edit in one place.</span></div></div>
-        <div class="feature"><div class="feature-icon">▶</div><div><b>Run your code</b><span>Run supported languages through an online execution service.</span></div></div>
-        <div class="feature"><div class="feature-icon">▣</div><div><b>Instant web preview</b><span>Preview HTML projects in a separate sandboxed panel.</span></div></div>
-        <div class="feature"><div class="feature-icon">↓</div><div><b>Download project</b><span>Export your workspace as a ZIP file.</span></div></div>
-      </div>
-
-      <div class="side-card">
-        <h3>Program input</h3>
-        <p style="margin-bottom:9px">Optional input sent to programs that read from standard input.</p>
-        <textarea id="stdin" class="input-area" placeholder="Type program input here..."></textarea>
-      </div>
-
-      <div class="side-card">
-        <h3>Execution service</h3>
-        <div class="status" id="serviceStatus"><i class="dot off"></i> Connecting to Piston…</div>
-        <p style="margin-top:10px">Code execution is handled by an external service. Availability, supported versions and usage limits depend on that service.</p>
-        <div class="notice">Safety: do not run code from people you don't trust. Never enter passwords, API keys or private information into shared code.</div>
-      </div>
-    </aside>
-  </main>
-  <footer>CodeSpace · A lightweight browser IDE · Your files stay in this browser unless you upload or download them.</footer>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/ruby/ruby.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/go/go.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <section class="section">
+    <div class="section-head"><h2>Result</h2><span class="muted" id="detected"></span></div>
+    <pre id="output">Your program's output will appear here.</pre>
+    <iframe id="preview" title="Code preview" sandbox="allow-scripts"></iframe>
+  </section>
+  <p class="muted">HTML/CSS/JavaScript projects run in the preview. Other supported languages run through the Piston online execution service. An internet connection is required.</p>
+</main>
 <script>
-window.addEventListener("error", (event) => {
-  const output = document.getElementById("output");
-  if (output) output.textContent = "CodeSpace startup error: " + (event.message || "Unknown error") +
-    "\\n\\nPlease refresh the page and share this message if it continues.";
-});
 (() => {
-  const $ = id => document.getElementById(id);
-  const extensionMap = {
-    html:"html", javascript:"js", typescript:"ts", python:"py", c:"c", cpp:"cpp",
-    java:"java", csharp:"cs", php:"php", ruby:"rb", go:"go", rust:"rs",
-    kotlin:"kt", swift:"swift", lua:"lua", r:"r", perl:"pl", bash:"sh", sql:"sql"
-  };
-  const modeMap = {
-    html:"htmlmixed", javascript:"javascript", typescript:"javascript", python:"python",
-    c:"text/x-csrc", cpp:"text/x-c++src", java:"text/x-java", csharp:"text/x-csharp",
-    php:"application/x-httpd-php", ruby:"ruby", go:"go", rust:"rust", kotlin:"text/x-kotlin",
-    swift:"text/x-swift", lua:"lua", r:"r", perl:"perl", bash:"shell", sql:"sql"
-  };
-  const starterCode = {
-    html:'<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>My first page</title>\n  <style>\n    body { font-family: Arial, sans-serif; padding: 40px; }\n    h1 { color: #5865e8; }\n  </style>\n</head>\n<body>\n  <h1>Hello, CodeSpace!</h1>\n  <p>Your website preview works.</p>\n  <button onclick="alert(\'It works!\')">Click me</button>\n</body>\n</html>',
-    javascript:'console.log("Hello from CodeSpace!");\n\nconst add = (a, b) => a + b;\nconsole.log("2 + 3 =", add(2, 3));',
-    python:'print("Hello from CodeSpace!")\n\nname = "developer"\nprint(f"Welcome, {name}!")',
-    cpp:'#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello from CodeSpace!" << endl;\n    return 0;\n}',
-    java:'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from CodeSpace!");\n    }\n}',
-    c:'#include <stdio.h>\n\nint main(void) {\n    printf("Hello from CodeSpace!\\n");\n    return 0;\n}'
-  };
+  const input = document.getElementById('fileInput');
+  const drop = document.getElementById('dropZone');
+  const list = document.getElementById('fileList');
+  const count = document.getElementById('fileCount');
+  const run = document.getElementById('runBtn');
+  const status = document.getElementById('status');
+  const output = document.getElementById('output');
+  const preview = document.getElementById('preview');
+  const detected = document.getElementById('detected');
   let files = [];
-  let activeId = null;
-  let activeLanguage = "html";
-  let runtimes = [];
-  const editor = CodeMirror.fromTextArea($("codeEditor"), {
-    lineNumbers:true, theme:"material-darker", indentUnit:2, tabSize:2,
-    lineWrapping:true, mode:"htmlmixed", autofocus:false
-  });
-  function makeFile(name, content="") {
-    return { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()), name, content };
-  }
-  function currentFile() { return files.find(f => f.id === activeId); }
-  function saveEditor() { const f=currentFile(); if(f) f.content=editor.getValue(); }
-  const languageNames = {
-    html:"HTML", javascript:"JavaScript", typescript:"TypeScript", python:"Python",
-    c:"C", cpp:"C++", java:"Java", csharp:"C#", php:"PHP", ruby:"Ruby",
-    go:"Go", rust:"Rust", kotlin:"Kotlin", swift:"Swift", lua:"Lua",
-    r:"R", perl:"Perl", bash:"Bash", sql:"SQL", css:"CSS",
-    json:"JSON", xml:"XML", plaintext:"Plain text"
+
+  const extToLang = {
+    html:'html', htm:'html', css:'css', js:'javascript', mjs:'javascript',
+    ts:'typescript', py:'python', c:'c', h:'c', cpp:'cpp', cc:'cpp', cxx:'cpp',
+    java:'java', cs:'csharp', php:'php', rb:'ruby', go:'go', rs:'rust',
+    kt:'kotlin', swift:'swift', lua:'lua', r:'r', pl:'perl', sh:'bash', sql:'sql'
   };
-  function extensionLanguage(name, content="") {
-    const ext=(name.split(".").pop()||"").toLowerCase();
-    const lookup={
-      html:"html",htm:"html",js:"javascript",mjs:"javascript",cjs:"javascript",jsx:"javascript",
-      ts:"typescript",tsx:"typescript",py:"python",pyw:"python",c:"c",h:"c",cpp:"cpp",cc:"cpp",cxx:"cpp",
-      java:"java",cs:"csharp",php:"php",rb:"ruby",go:"go",rs:"rust",kt:"kotlin",kts:"kotlin",
-      swift:"swift",lua:"lua",r:"r",pl:"perl",sh:"bash",bash:"bash",sql:"sql",
-      css:"css",json:"json",xml:"xml",svg:"xml"
-    };
-    if (lookup[ext]) return lookup[ext];
-    const sample=(content||"").trim();
-    if (/^(<!doctype html|<html|<body|<head)/i.test(sample)) return "html";
-    if (/^(import |from |def |class |print\s*\()/m.test(sample) && /(:\s*$|print\s*\()/m.test(sample)) return "python";
-    if (/^(#include\s*<|int main\s*\()/m.test(sample)) return "cpp";
-    if (/^(public class |class .*\\{)/m.test(sample)) return "java";
-    if (/^(const |let |var |function |console\.log)/m.test(sample)) return "javascript";
-    return "plaintext";
+
+  function languageOf(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    return extToLang[ext] || null;
   }
-  function setLanguage(lang) {
-    activeLanguage=lang;
-    $("languageBadge").textContent=languageNames[lang] || lang.toUpperCase();
-    editor.setOption("mode", modeMap[lang] || (lang==="css"?"css":lang==="json"?"application/json":lang==="xml"?"xml":"text/plain"));
+
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    for (const file of incoming) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert(file.name + ' is over 2 MB and was skipped.');
+        continue;
+      }
+      // Replace a file with the same name instead of showing duplicates.
+      files = files.filter(existing => existing.name !== file.name);
+      files.push(file);
+    }
+    render();
+    input.value = '';
   }
-  function renderTabs() {
-    $("fileTabs").innerHTML="";
-    files.forEach(f=>{
-      const tab=document.createElement("button");
-      tab.className="file-tab"+(f.id===activeId?" active":"");
-      tab.textContent=f.name;
-      tab.title=f.name;
-      tab.addEventListener("click",()=>switchFile(f.id));
-      $("fileTabs").appendChild(tab);
+
+  function render() {
+    list.innerHTML = '';
+    count.textContent = files.length + (files.length === 1 ? ' file' : ' files');
+    run.disabled = files.length === 0;
+    if (!files.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'No files selected yet.';
+      list.appendChild(li);
+      status.textContent = 'Select at least one file to begin.';
+      return;
+    }
+    files.forEach(file => {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = file.name;
+      const size = document.createElement('span');
+      size.className = 'muted';
+      size.textContent = file.size < 1024 ? file.size + ' B' : (file.size / 1024).toFixed(1) + ' KB';
+      li.append(name, size);
+      list.appendChild(li);
     });
-    const f=currentFile();
-    $("fileInfo").textContent=f?f.name:"No file";
+    status.textContent = 'Ready to run.';
   }
-  function switchFile(id) {
-    saveEditor(); activeId=id;
-    const f=currentFile();
-    editor.setValue(f?f.content:"");
-    if(f) setLanguage(extensionLanguage(f.name, f.content));
-    renderTabs();
-    editor.refresh();
+
+  input.addEventListener('change', event => addFiles(event.target.files));
+  ['dragenter', 'dragover'].forEach(type => drop.addEventListener(type, event => {
+    event.preventDefault(); event.stopPropagation(); drop.classList.add('over');
+  }));
+  ['dragleave', 'drop'].forEach(type => drop.addEventListener(type, event => {
+    event.preventDefault(); event.stopPropagation(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', event => addFiles(event.dataTransfer.files));
+
+  async function runWebProject() {
+    const byName = new Map(files.map(file => [file.name, file]));
+    const htmlFile = files.find(file => /\.html?$/i.test(file.name));
+    let html = htmlFile ? await htmlFile.text() : '<!doctype html><html><body></body></html>';
+    const cssFiles = files.filter(file => /\.css$/i.test(file.name));
+    const jsFiles = files.filter(file => /\.(js|mjs)$/i.test(file.name));
+    const css = await Promise.all(cssFiles.map(file => file.text()));
+    const js = await Promise.all(jsFiles.map(file => file.text()));
+
+    const styleTag = css.length ? '<style>' + css.join('\n') + '</style>' : '';
+    const scriptTag = js.length ? '<script>' + js.join('\n') + '<\/script>' : '';
+    if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, styleTag + '</head>');
+    else html = styleTag + html;
+    if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, scriptTag + '</body>');
+    else html += scriptTag;
+
+    preview.srcdoc = html;
+    preview.style.display = 'block';
+    output.style.display = 'none';
+    detected.textContent = 'HTML / CSS / JavaScript preview';
+    status.textContent = 'Preview generated.';
   }
-  function addFile(name, content="") {
-    const f=makeFile(name,content); files.push(f); switchFile(f.id);
+
+  async function runOtherLanguage(file, lang) {
+    status.textContent = 'Sending code to online runner…';
+    output.style.display = 'block';
+    preview.style.display = 'none';
+    output.textContent = 'Running ' + lang + '…';
+    const runtimesResponse = await fetch('https://emkc.org/api/v2/piston/runtimes');
+    if (!runtimesResponse.ok) throw new Error('Could not contact the code runner.');
+    const runtimes = await runtimesResponse.json();
+    const runtime = runtimes
+      .filter(item => item.language === lang)
+      .sort((a, b) => String(b.version).localeCompare(String(a.version), undefined, { numeric: true }))[0];
+    if (!runtime) throw new Error('The online runner does not currently support ' + lang + '.');
+    const source = await file.text();
+    const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: runtime.language,
+        version: runtime.version,
+        files: [{ name: file.name, content: source }],
+        stdin: '',
+        args: []
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Execution failed.');
+    let result = '';
+    if (data.compile && data.compile.output) result += data.compile.output + '\n';
+    if (data.compile && data.compile.stderr) result += data.compile.stderr + '\n';
+    if (data.run && data.run.output) result += data.run.output;
+    if (data.run && data.run.stderr) result += '\n' + data.run.stderr;
+    if (!result.trim()) result = 'Program finished with no output.';
+    output.textContent = result;
+    detected.textContent = 'Detected: ' + lang;
+    status.textContent = 'Finished.';
   }
-  function setOutput(text) {
-    $("output").style.display="block"; $("preview").style.display="none";
-    $("output").textContent=text || "(No output)";
-    document.querySelectorAll(".output-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab==="console"));
-  }
-  function showPreview() {
-    saveEditor();
-    const f=currentFile();
-    if(!f) return;
-    let html=f.content;
-    if(!/<html[\s>]/i.test(html) && !/<body[\s>]/i.test(html)) {
-      html="<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head><body>"+html+"</body></html>";
-    }
-    $("preview").srcdoc=html;
-    $("output").style.display="none"; $("preview").style.display="block";
-    document.querySelectorAll(".output-tab").forEach(b=>b.classList.toggle("active",b.dataset.tab==="preview"));
-  }
-  function isHtmlMode() { return activeLanguage==="html"; }
-  async function loadRuntimes() {
+
+  run.addEventListener('click', async () => {
+    if (!files.length) return;
+    run.disabled = true;
+    run.textContent = 'Running…';
     try {
-      const res=await fetch("https://emkc.org/api/v2/piston/runtimes");
-      if(!res.ok) throw new Error("Runner returned HTTP "+res.status);
-      runtimes=await res.json();
-      $("runtimeStatus").innerHTML='<i class="dot"></i> Runner online';
-      $("serviceStatus").innerHTML='<i class="dot"></i> Connected to Piston';
-    } catch(e) {
-      $("runtimeStatus").innerHTML='<i class="dot off"></i> Runner unavailable';
-      $("serviceStatus").innerHTML='<i class="dot off"></i> Runner unavailable';
+      const languages = files.map(file => ({ file, lang: languageOf(file) }));
+      const htmlProject = languages.some(item => item.lang === 'html' || item.lang === 'css' || item.lang === 'javascript');
+      if (htmlProject) {
+        await runWebProject();
+      } else {
+        const chosen = languages.find(item => item.lang);
+        if (!chosen) throw new Error('Could not identify the language from the file extension. Please upload a file with a supported extension.');
+        await runOtherLanguage(chosen.file, chosen.lang);
+      }
+    } catch (error) {
+      preview.style.display = 'none';
+      output.style.display = 'block';
+      output.textContent = 'Could not run the selected files.\n\n' + error.message;
+      status.textContent = 'Run failed.';
+    } finally {
+      run.disabled = files.length === 0;
+      run.textContent = '▶ Run';
     }
-  }
-  async function runCode() {
-    saveEditor();
-    const f=currentFile();
-    if(!f) return;
-    if(isHtmlMode()) { showPreview(); return; }
-    const lang=activeLanguage;
-    if(lang==="css") {
-      setOutput("CSS stylesheet detected. CSS needs an HTML page to display its styling. Open the matching .html file to preview the website.");
-      return;
-    }
-    if(lang==="plaintext" || lang==="json" || lang==="xml") {
-      setOutput(languageNames[lang]+" file detected. It can be edited here, but is not directly executable.");
-      return;
-    }
-    const runBtn=$("runBtn");
-    runBtn.disabled=true; runBtn.textConte
+  });
+})();
+</script>
+</body>
+</html>
